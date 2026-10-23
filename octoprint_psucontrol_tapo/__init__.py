@@ -5,7 +5,32 @@ import threading
 
 import flask
 import octoprint.plugin
-from kasa import AuthenticationError, Credentials, Discover
+from kasa import AuthenticationError, Credentials, Device, DeviceConfig, Discover
+from kasa import DeviceConnectionParameters, DeviceEncryptionType, DeviceFamily
+
+# Newer Tapo firmware (P110 1.4+). Connecting with these params skips UDP discovery,
+# which some networks/hosts (e.g. OctoPi) never get a reply to.
+TPAP = DeviceConnectionParameters(DeviceFamily.SmartTapoPlug, DeviceEncryptionType.Tpap,
+                                  login_version=2, http_port=80)
+
+
+async def connect(host, creds):
+    try:
+        return await Device.connect(config=DeviceConfig(host, credentials=creds, connection_type=TPAP, timeout=10))
+    except AuthenticationError:
+        raise
+    except Exception:
+        # older firmware (KLAP/AES): let UDP discovery pick the protocol
+        return await Discover.discover_single(host, credentials=creds, timeout=5)
+
+
+async def port_open(ip, port=80):
+    try:
+        _, w = await asyncio.wait_for(asyncio.open_connection(ip, port), 2)
+        w.close()
+        return True
+    except Exception:
+        return False
 
 
 class TapoPlugin(octoprint.plugin.SettingsPlugin,
@@ -71,8 +96,7 @@ class TapoPlugin(octoprint.plugin.SettingsPlugin,
     async def _control(self, action):
         try:
             if self._dev is None:
-                self._dev = await Discover.discover_single(
-                    self._settings.get(["host"]), credentials=self._credentials(), timeout=10)
+                self._dev = await connect(self._settings.get(["host"]), self._credentials())
             await self._dev.update()
             if action != "status":
                 await (self._dev.turn_on() if action == "on" else self._dev.turn_off())
@@ -104,21 +128,18 @@ class TapoPlugin(octoprint.plugin.SettingsPlugin,
         return [d for d in found if d]
 
     async def _probe(self, ip, creds):
+        # Tapo plugs serve HTTP on 80; only try a (slow) login where that port is open
+        if not await port_open(ip):
+            return None
         dev = None
         try:
-            dev = await Discover.discover_single(ip, credentials=creds, timeout=3)
-            await dev.update()
+            dev = await Device.connect(config=DeviceConfig(ip, credentials=creds, connection_type=TPAP, timeout=10))
             return dict(host=ip, alias=dev.alias, model=dev.model, note="")
-        except AuthenticationError:
-            return dict(host=ip, alias="?", model=getattr(dev, "model", "Tapo"), note="login failed - check email/password")
-        except asyncio.TimeoutError:
-            return None
         except Exception as e:
-            # anything that answered discovery but failed later is still worth showing
-            if dev is None and "Timed out" in str(e):
-                return None
-            self._logger.info("Probe %s: %s", ip, e)
-            return dict(host=ip, alias="?", model="?", note=str(e)[:150])
+            if isinstance(e, AuthenticationError) or getattr(getattr(e, "error_code", None), "name", "") == "ACCOUNT_ERROR":
+                return dict(host=ip, alias="?", model="Tapo", note="login failed - check email/password")
+            self._logger.debug("Probe %s: %s", ip, e)
+            return None
         finally:
             if dev:
                 try:

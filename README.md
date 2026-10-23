@@ -1,21 +1,21 @@
 # OctoPrint-PSUControl-Tapo
 
-[PSU Control](https://github.com/kantlivelong/OctoPrint-PSUControl) sub-plugin for TP-Link Tapo smart plugs (tested with P110 on TPAP firmware).
+Standalone OctoPrint plugin to switch a TP-Link Tapo smart plug (tested with P110 on TPAP firmware).
+Adds a plug icon to the top bar (green = on, red = off, grey = error; click to toggle) and a settings page with auto-detect.
 
 ## Requirements
-- OctoPrint on **Python 3.11+** (`~/oprint/bin/python --version`)
-- PSU Control installed
+- OctoPrint on **Python 3.11+**: check Settings > About > System info `python` or `~/oprint/bin/python --version`
 - Tapo app: **Me > Third-Party Services > Third-Party Compatibility = ON**
 
 ## Install
+Plugin Manager > Get More > "...from URL":
 ```
-~/oprint/bin/pip install https://github.com/sudo-atharva/OctoPrint-PSUControl-Tapo/archive/main.zip
+https://github.com/sudo-atharva/OctoPrint-PSUControl-Tapo/archive/main.zip
 ```
-or paste that URL into OctoPrint Plugin Manager > Get More > from URL. Restart OctoPrint.
+Restart OctoPrint.
 
 ## Setup
-1. Settings > **PSU Control - Tapo**: enter Tapo email + password, click **Auto-detect**, pick your plug, Save.
-2. Settings > **PSU Control**: set Switching and Sensing to `psucontrol_tapo`.
+Settings > **Tapo Plug**: enter Tapo email + password, click **Auto-detect**, pick your plug, Save. Use the On/Off buttons there to test; errors are shown next to them.
 
 Uses an unreleased python-kasa build ([PR #1592](https://github.com/python-kasa/python-kasa/pull/1592)) because released python-kasa does not support TPAP firmware yet.
 

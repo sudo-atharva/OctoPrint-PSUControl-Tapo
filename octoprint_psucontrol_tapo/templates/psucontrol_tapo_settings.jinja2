@@ -1,4 +1,4 @@
-<h4>PSU Control - Tapo</h4>
+<h4>Tapo Plug</h4>
 <form class="form-horizontal" onsubmit="return false;">
     <div class="control-group">
         <label class="control-label">Tapo email</label>
@@ -13,16 +13,26 @@
         <div class="controls">
             <input type="text" class="input-medium" placeholder="192.168.1.50" data-bind="value: settings.host">
             <button class="btn" data-bind="click: discover, enable: !scanning()">
-                <i class="fas fa-search" data-bind="css: {'fa-spin fa-spinner': scanning}"></i> Auto-detect
+                <i class="fas" data-bind="css: scanning() ? 'fa-spinner fa-spin' : 'fa-search'"></i> Auto-detect
             </button>
             <span class="help-block" data-bind="text: message"></span>
             <ul class="unstyled" data-bind="foreach: devices">
                 <li><a href="#" data-bind="click: $parent.pick">
                     <span data-bind="text: alias"></span> (<span data-bind="text: model"></span>) - <span data-bind="text: host"></span>
+                    <span class="text-error" data-bind="text: note"></span>
                 </a></li>
             </ul>
         </div>
     </div>
+    <div class="control-group">
+        <label class="control-label">Plug</label>
+        <div class="controls">
+            <button class="btn btn-success" data-bind="click: turnOn">On</button>
+            <button class="btn btn-danger" data-bind="click: turnOff">Off</button>
+            <span data-bind="text: navTitle"></span>
+            <span class="help-block">Save settings first. Errors show here.</span>
+        </div>
+    </div>
     <p class="muted">Enable <b>Third-Party Compatibility</b> in the Tapo app (Me &gt; Third-Party Services).
-        Then in PSU Control settings pick <b>psucontrol_tapo</b> as the Switching and Sensing plugin.</p>
+        The plug icon in the top bar toggles power (green = on, red = off, grey = error).</p>
 </form>

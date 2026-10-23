@@ -8,25 +8,16 @@ import octoprint.plugin
 from kasa import AuthenticationError, Credentials, Discover
 
 
-class PSUControl_Tapo(octoprint.plugin.StartupPlugin,
-                      octoprint.plugin.SettingsPlugin,
-                      octoprint.plugin.TemplatePlugin,
-                      octoprint.plugin.AssetPlugin,
-                      octoprint.plugin.SimpleApiPlugin,
-                      octoprint.plugin.RestartNeedingPlugin):
+class TapoPlugin(octoprint.plugin.SettingsPlugin,
+                 octoprint.plugin.TemplatePlugin,
+                 octoprint.plugin.AssetPlugin,
+                 octoprint.plugin.SimpleApiPlugin):
 
     def __init__(self):
-        # kasa is async; one long-lived loop keeps the plug session alive between polls
+        # kasa is async; one long-lived loop keeps the plug session alive between calls
         self._loop = asyncio.new_event_loop()
         threading.Thread(target=self._loop.run_forever, daemon=True).start()
         self._dev = None
-
-    def on_startup(self, host, port):
-        psucontrol_helpers = self._plugin_manager.get_helpers("psucontrol")
-        if not psucontrol_helpers or "register_plugin" not in psucontrol_helpers:
-            self._logger.warning("The version of PSUControl that is installed does not support plugin registration.")
-            return
-        psucontrol_helpers["register_plugin"](self)
 
     def get_settings_defaults(self):
         return dict(host="", username="", password="")
@@ -39,25 +30,36 @@ class PSUControl_Tapo(octoprint.plugin.StartupPlugin,
         self._run(self._drop_device())
 
     def get_template_configs(self):
-        return [dict(type="settings", custom_bindings=True)]
+        return [dict(type="settings", custom_bindings=True),
+                dict(type="navbar", custom_bindings=True)]
 
     def get_assets(self):
         return dict(js=["js/psucontrol_tapo.js"])
 
-    # ---- PSUControl sub-plugin API ----
+    # ---- API: GET = state, POST on/off/discover ----
 
-    def turn_psu_on(self):
-        self._control("on")
+    def get_api_commands(self):
+        return dict(on=[], off=[], discover=[])
 
-    def turn_psu_off(self):
-        self._control("off")
+    def on_api_get(self, request):
+        return self._state_response("status")
 
-    def get_psu_state(self):
+    def on_api_command(self, command, data):
+        if command == "discover":
+            creds = self._credentials(data.get("username"), data.get("password"))
+            return flask.jsonify(devices=self._run(self._scan(creds)))
+        return self._state_response(command)
+
+    def _state_response(self, action):
+        if not self._settings.get(["host"]):
+            return flask.jsonify(on=None, error="No plug IP set (Settings > Tapo Plug)")
         try:
-            return self._control("status")
+            return flask.jsonify(on=self._run(self._control(action)), error=None)
         except Exception as e:
-            self._logger.error("Tapo state read failed: %s", e)
-            return False
+            self._logger.exception("Tapo %s failed", action)
+            return flask.jsonify(on=None, error="%s: %s" % (type(e).__name__, e))
+
+    # ---- plug control ----
 
     def _run(self, coro, timeout=60):
         return asyncio.run_coroutine_threadsafe(coro, self._loop).result(timeout)
@@ -66,10 +68,7 @@ class PSUControl_Tapo(octoprint.plugin.StartupPlugin,
         return Credentials(username or self._settings.get(["username"]),
                            password or self._settings.get(["password"]))
 
-    def _control(self, action):
-        return self._run(self._control_async(action))
-
-    async def _control_async(self, action):
+    async def _control(self, action):
         try:
             if self._dev is None:
                 self._dev = await Discover.discover_single(
@@ -91,46 +90,47 @@ class PSUControl_Tapo(octoprint.plugin.StartupPlugin,
             except Exception:
                 pass
 
-    # ---- Auto-detect ----
-
-    def get_api_commands(self):
-        return dict(discover=[])
-
-    def on_api_command(self, command, data):
-        creds = self._credentials(data.get("username"), data.get("password"))
-        return flask.jsonify(devices=self._run(self._scan(creds)))
+    # ---- auto-detect ----
 
     async def _scan(self, creds):
         # ponytail: probes the local /24 only (broadcast discovery is unreliable on some networks); widen if plug lives on another subnet
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
-        base = s.getsockname()[0].rsplit(".", 1)[0]
+        me = s.getsockname()[0]
         s.close()
+        base = me.rsplit(".", 1)[0]
+        self._logger.info("Scanning %s.1-254 for Tapo plugs", base)
         found = await asyncio.gather(*(self._probe("%s.%d" % (base, i), creds) for i in range(1, 255)))
         return [d for d in found if d]
 
     async def _probe(self, ip, creds):
+        dev = None
         try:
             dev = await Discover.discover_single(ip, credentials=creds, timeout=3)
-        except AuthenticationError:
-            return dict(host=ip, alias="(login failed - check email/password)", model="Tapo")
-        except Exception:
-            return None
-        try:
             await dev.update()
-            return dict(host=ip, alias=dev.alias, model=dev.model)
+            return dict(host=ip, alias=dev.alias, model=dev.model, note="")
         except AuthenticationError:
-            return dict(host=ip, alias="(login failed - check email/password)", model=dev.model)
-        except Exception:
+            return dict(host=ip, alias="?", model=getattr(dev, "model", "Tapo"), note="login failed - check email/password")
+        except asyncio.TimeoutError:
             return None
+        except Exception as e:
+            # anything that answered discovery but failed later is still worth showing
+            if dev is None and "Timed out" in str(e):
+                return None
+            self._logger.info("Probe %s: %s", ip, e)
+            return dict(host=ip, alias="?", model="?", note=str(e)[:150])
         finally:
-            await dev.disconnect()
+            if dev:
+                try:
+                    await dev.disconnect()
+                except Exception:
+                    pass
 
 
-__plugin_name__ = "PSU Control - Tapo"
+__plugin_name__ = "Tapo Plug"
 __plugin_pythoncompat__ = ">=3.11,<4"
 
 
 def __plugin_load__():
     global __plugin_implementation__
-    __plugin_implementation__ = PSUControl_Tapo()
+    __plugin_implementation__ = TapoPlugin()

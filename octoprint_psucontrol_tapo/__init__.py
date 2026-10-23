@@ -19,9 +19,12 @@ async def connect(host, creds):
         return await Device.connect(config=DeviceConfig(host, credentials=creds, connection_type=TPAP, timeout=10))
     except AuthenticationError:
         raise
-    except Exception:
+    except Exception as direct:
         # older firmware (KLAP/AES): let UDP discovery pick the protocol
-        return await Discover.discover_single(host, credentials=creds, timeout=5)
+        try:
+            return await Discover.discover_single(host, credentials=creds, timeout=5)
+        except Exception as udp:
+            raise Exception("direct TPAP: %s: %s | UDP discovery: %s" % (type(direct).__name__, direct, udp)) from direct
 
 
 async def port_open(ip, port=80):
@@ -138,7 +141,7 @@ class TapoPlugin(octoprint.plugin.SettingsPlugin,
         except Exception as e:
             if isinstance(e, AuthenticationError) or getattr(getattr(e, "error_code", None), "name", "") == "ACCOUNT_ERROR":
                 return dict(host=ip, alias="?", model="Tapo", note="login failed - check email/password")
-            self._logger.debug("Probe %s: %s", ip, e)
+            self._logger.info("Probe %s (port 80 open): %s: %s", ip, type(e).__name__, e)
             return None
         finally:
             if dev:

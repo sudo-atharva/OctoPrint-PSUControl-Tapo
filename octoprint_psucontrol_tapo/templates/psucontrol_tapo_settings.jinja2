@@ -33,6 +33,17 @@
             <span class="help-block">Save settings first. Errors show here.</span>
         </div>
     </div>
+    <div class="control-group">
+        <label class="control-label">Auto-off</label>
+        <div class="controls">
+            <label class="checkbox"><input type="checkbox" data-bind="checked: settings.auto_off"> Turn plug off after a print finishes</label>
+            <div class="input-append">
+                <input type="number" min="0" step="0.5" class="input-mini" data-bind="value: settings.auto_off_delay, enable: settings.auto_off">
+                <span class="add-on">min after print done</span>
+            </div>
+            <span class="help-block">Starting a new print cancels a pending auto-off. Cancelled/failed prints don't trigger it.</span>
+        </div>
+    </div>
     <p class="muted">Enable <b>Third-Party Compatibility</b> in the Tapo app (Me &gt; Third-Party Services).
         The plug icon in the top bar toggles power (green = on, red = off, grey = error).</p>
 </form>

@@ -17,6 +17,9 @@ Restart OctoPrint.
 ## Setup
 Settings > **Tapo Plug**: enter Tapo email + password, click **Auto-detect**, pick your plug, Save. Use the On/Off buttons there to test; errors are shown next to them.
 
+**Auto-off** (`auto-off` branch, testing): tick "Turn plug off after a print finishes" and set the delay in minutes. Starting a new print cancels a pending auto-off; cancelled/failed prints don't trigger it.
+Test build install URL: `https://github.com/sudo-atharva/OctoPrint-PSUControl-Tapo/archive/refs/heads/auto-off.zip`
+
 Uses an unreleased python-kasa build ([PR #1592](https://github.com/python-kasa/python-kasa/pull/1592)) because released python-kasa does not support TPAP firmware yet.
 
 `tapo_test.py` is a standalone CLI test: `python tapo_test.py <ip> status|on|off` (credentials via `TAPO_USERNAME` / `TAPO_PASSWORD` env vars).

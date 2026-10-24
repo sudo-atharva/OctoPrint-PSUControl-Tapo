@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
     name="OctoPrint-PSUControl-Tapo",
-    version="0.1.0",
+    version="0.2.0.dev0",
     description="Control a TP-Link Tapo smart plug (P110 etc.) from OctoPrint",
     packages=["octoprint_psucontrol_tapo"],
     package_data={"octoprint_psucontrol_tapo": ["templates/*", "static/js/*"]},

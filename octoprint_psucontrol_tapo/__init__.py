@@ -39,6 +39,7 @@ async def port_open(ip, port=80):
 class TapoPlugin(octoprint.plugin.SettingsPlugin,
                  octoprint.plugin.TemplatePlugin,
                  octoprint.plugin.AssetPlugin,
+                 octoprint.plugin.EventHandlerPlugin,
                  octoprint.plugin.SimpleApiPlugin):
 
     def __init__(self):
@@ -46,9 +47,40 @@ class TapoPlugin(octoprint.plugin.SettingsPlugin,
         self._loop = asyncio.new_event_loop()
         threading.Thread(target=self._loop.run_forever, daemon=True).start()
         self._dev = None
+        self._off_timer = None
 
     def get_settings_defaults(self):
-        return dict(host="", username="", password="")
+        return dict(host="", username="", password="", auto_off=False, auto_off_delay=2)
+
+    # ---- auto-off after print ----
+
+    def on_event(self, event, payload):
+        if event == "PrintStarted":
+            self._cancel_auto_off()
+        elif event == "PrintDone" and self._settings.get_boolean(["auto_off"]):
+            minutes = max(0.0, float(self._settings.get(["auto_off_delay"]) or 0))
+            self._cancel_auto_off()
+            self._off_timer = threading.Timer(minutes * 60, self._auto_off)
+            self._off_timer.daemon = True
+            self._off_timer.start()
+            self._logger.info("Print done, plug turns off in %s min", minutes)
+
+    def _cancel_auto_off(self):
+        if self._off_timer:
+            self._off_timer.cancel()
+            self._off_timer = None
+            self._logger.info("Auto-off cancelled")
+
+    def _auto_off(self):
+        self._off_timer = None
+        # re-check at fire time: user may have disabled it or started another print meanwhile
+        if not self._settings.get_boolean(["auto_off"]) or self._printer.is_printing():
+            return
+        try:
+            self._run(self._control("off"))
+            self._logger.info("Auto-off: plug turned off")
+        except Exception:
+            self._logger.exception("Auto-off failed")
 
     def get_settings_restricted_paths(self):
         return dict(admin=[["username"], ["password"]])

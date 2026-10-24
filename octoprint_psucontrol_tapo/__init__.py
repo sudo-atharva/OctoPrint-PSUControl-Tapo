@@ -8,23 +8,35 @@ import octoprint.plugin
 from kasa import AuthenticationError, Credentials, Device, DeviceConfig, Discover
 from kasa import DeviceConnectionParameters, DeviceEncryptionType, DeviceFamily
 
-# Newer Tapo firmware (P110 1.4+). Connecting with these params skips UDP discovery,
-# which some networks/hosts (e.g. OctoPi) never get a reply to.
-TPAP = DeviceConnectionParameters(DeviceFamily.SmartTapoPlug, DeviceEncryptionType.Tpap,
-                                  login_version=2, http_port=80)
+# Tapo plugs speak one of these over HTTP :80 depending on firmware/settings (the same P110
+# switched TPAP -> KLAP after toggling Third-Party Compatibility). Trying them directly
+# skips UDP discovery, which some hosts (e.g. OctoPi) never get a reply to.
+PROTOCOLS = [DeviceConnectionParameters(DeviceFamily.SmartTapoPlug, enc, login_version=lv, http_port=80)
+             for enc, lv in ((DeviceEncryptionType.Tpap, 2), (DeviceEncryptionType.Klap, 2),
+                             (DeviceEncryptionType.Aes, 2))]
+
+
+def is_auth_error(e):
+    return isinstance(e, AuthenticationError) or \
+        getattr(getattr(e, "error_code", None), "name", "") == "ACCOUNT_ERROR"
 
 
 async def connect(host, creds):
-    try:
-        return await Device.connect(config=DeviceConfig(host, credentials=creds, connection_type=TPAP, timeout=10))
-    except AuthenticationError:
-        raise
-    except Exception as direct:
-        # older firmware (KLAP/AES): let UDP discovery pick the protocol
+    errors = []
+    for params in PROTOCOLS:
         try:
-            return await Discover.discover_single(host, credentials=creds, timeout=5)
-        except Exception as udp:
-            raise Exception("direct TPAP: %s: %s | UDP discovery: %s" % (type(direct).__name__, direct, udp)) from direct
+            return await Device.connect(config=DeviceConfig(host, credentials=creds, connection_type=params, timeout=10))
+        except Exception as e:
+            if is_auth_error(e):
+                raise  # wrong login: stop, repeated attempts lock the plug for minutes
+            errors.append("%s: %s" % (params.encryption_type.value, e))
+    try:
+        return await Discover.discover_single(host, credentials=creds, timeout=5)
+    except Exception as e:
+        if is_auth_error(e):
+            raise
+        errors.append("UDP discovery: %s" % e)
+    raise Exception(" | ".join(errors))
 
 
 async def port_open(ip, port=80):
@@ -36,7 +48,8 @@ async def port_open(ip, port=80):
         return False
 
 
-class TapoPlugin(octoprint.plugin.SettingsPlugin,
+class TapoPlugin(octoprint.plugin.StartupPlugin,
+                 octoprint.plugin.SettingsPlugin,
                  octoprint.plugin.TemplatePlugin,
                  octoprint.plugin.AssetPlugin,
                  octoprint.plugin.EventHandlerPlugin,
@@ -51,6 +64,27 @@ class TapoPlugin(octoprint.plugin.SettingsPlugin,
 
     def get_settings_defaults(self):
         return dict(host="", username="", password="", auto_off=False, auto_off_delay=2)
+
+    # ---- optional PSU Control backend: OctoDash, OctoApp etc. switch power through PSU Control ----
+
+    def on_startup(self, host, port):
+        helpers = self._plugin_manager.get_helpers("psucontrol", "register_plugin")
+        if helpers:
+            helpers["register_plugin"](self)
+            self._logger.info("Registered with PSU Control")
+
+    def turn_psu_on(self):
+        self._run(self._control("on"))
+
+    def turn_psu_off(self):
+        self._run(self._control("off"))
+
+    def get_psu_state(self):
+        try:
+            return bool(self._run(self._control("status")))
+        except Exception as e:
+            self._logger.error("Tapo state read failed: %s", e)
+            return False
 
     # ---- auto-off after print ----
 
@@ -168,10 +202,10 @@ class TapoPlugin(octoprint.plugin.SettingsPlugin,
             return None
         dev = None
         try:
-            dev = await Device.connect(config=DeviceConfig(ip, credentials=creds, connection_type=TPAP, timeout=10))
+            dev = await connect(ip, creds)
             return dict(host=ip, alias=dev.alias, model=dev.model, note="")
         except Exception as e:
-            if isinstance(e, AuthenticationError) or getattr(getattr(e, "error_code", None), "name", "") == "ACCOUNT_ERROR":
+            if is_auth_error(e):
                 return dict(host=ip, alias="?", model="Tapo", note="login failed - check email/password")
             self._logger.info("Probe %s (port 80 open): %s: %s", ip, type(e).__name__, e)
             return None

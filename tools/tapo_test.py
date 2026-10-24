@@ -7,9 +7,9 @@ Credentials = your Tapo app account (email + password), set as env vars:
     PowerShell:  $env:TAPO_USERNAME="you@example.com"; $env:TAPO_PASSWORD="secret"
 
 Usage:
-    python tapo_test.py 192.168.1.50 status
-    python tapo_test.py 192.168.1.50 on
-    python tapo_test.py 192.168.1.50 off
+    python tools/tapo_test.py 192.168.1.50 status
+    python tools/tapo_test.py 192.168.1.50 on
+    python tools/tapo_test.py 192.168.1.50 off
 """
 import argparse
 import asyncio

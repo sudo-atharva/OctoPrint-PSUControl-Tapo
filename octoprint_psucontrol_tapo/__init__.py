@@ -246,10 +246,31 @@ class TapoPlugin(octoprint.plugin.StartupPlugin,
                     pass
 
 
+    # ---- OctoPrint Software Update: offer new GitHub releases ----
+
+    def get_update_information(self):
+        return dict(psucontrol_tapo=dict(
+            displayName="Tapo Plug",
+            displayVersion=self._plugin_version,
+            type="github_release",
+            user="sudo-atharva",
+            repo="OctoPrint-PSUControl-Tapo",
+            current=self._plugin_version,
+            pip="https://github.com/sudo-atharva/OctoPrint-PSUControl-Tapo/archive/{target_version}.zip",
+        ))
+
+
 __plugin_name__ = "Tapo Plug"
+__plugin_description__ = "Switch a TP-Link Tapo smart plug (P110 etc.) from OctoPrint: auto-off after print, auto-connect, OctoDash/OctoApp support"
+__plugin_author__ = "sudo-atharva"
+__plugin_url__ = "https://github.com/sudo-atharva/OctoPrint-PSUControl-Tapo"
+__plugin_license__ = "AGPLv3"
 __plugin_pythoncompat__ = ">=3.11,<4"
 
 
 def __plugin_load__():
-    global __plugin_implementation__
+    global __plugin_implementation__, __plugin_hooks__
     __plugin_implementation__ = TapoPlugin()
+    __plugin_hooks__ = {
+        "octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information,
+    }

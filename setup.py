@@ -9,5 +9,6 @@ setuptools.setup(
     python_requires=">=3.11",
     # TPAP firmware support is only in this unmerged python-kasa PR; switch to "python-kasa>=X" once released
     install_requires=["python-kasa @ git+https://github.com/python-kasa/python-kasa.git@refs/pull/1592/head"],
-    entry_points={"octoprint.plugin": ["psucontrol_tapo = octoprint_psucontrol_tapo"]},
+    entry_points={"octoprint.plugin": ["psucontrol_tapo = octoprint_psucontrol_tapo",
+                                       "psucontrol = octoprint_psucontrol_tapo.psucontrol_compat"]},
 )

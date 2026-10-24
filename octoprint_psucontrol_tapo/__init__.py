@@ -84,6 +84,9 @@ class TapoPlugin(octoprint.plugin.StartupPlugin,
 
     def _on_state(self, is_on):
         was, self._last_on = self._last_on, is_on
+        if was != is_on:
+            # live update for apps that listen to PSU Control's socket messages
+            self._plugin_manager.send_plugin_message("psucontrol", dict(isPSUOn=bool(is_on)))
         if was is False and is_on and self._settings.get_boolean(["auto_connect"]):
             delay = max(0.0, float(self._settings.get(["auto_connect_delay"]) or 0))
             self._logger.info("Plug turned on, connecting printer in %s s", delay)
@@ -99,25 +102,14 @@ class TapoPlugin(octoprint.plugin.StartupPlugin,
         self._logger.info("Auto-connect: port=%s baudrate=%s", port or "AUTO", baud or "AUTO")
         self._printer.connect(port=port, baudrate=baud)
 
-    # ---- optional PSU Control backend: OctoDash, OctoApp etc. switch power through PSU Control ----
-
-    def on_startup(self, host, port):
-        helpers = self._plugin_manager.get_helpers("psucontrol", "register_plugin")
-        if helpers:
-            helpers["register_plugin"](self)
-            self._logger.info("Registered with PSU Control")
-
-    def turn_psu_on(self):
-        self._run(self._control("on"))
-
-    def turn_psu_off(self):
-        self._run(self._control("off"))
-
-    def get_psu_state(self):
+    def switch(self, action):
+        """on / off / toggle / status -> bool. Used by psucontrol_compat (OctoDash, OctoApp)."""
         try:
-            return bool(self._run(self._control("status")))
+            if action == "toggle":
+                action = "off" if self._run(self._control("status")) else "on"
+            return bool(self._run(self._control(action)))
         except Exception as e:
-            self._logger.error("Tapo state read failed: %s", e)
+            self._logger.error("Tapo %s failed: %s", action, e)
             return False
 
     # ---- auto-off after print ----

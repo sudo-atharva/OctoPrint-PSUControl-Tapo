@@ -44,6 +44,18 @@
             <span class="help-block">Starting a new print cancels a pending auto-off. Cancelled/failed prints don't trigger it.</span>
         </div>
     </div>
+    <div class="control-group">
+        <label class="control-label">Auto-connect</label>
+        <div class="controls">
+            <label class="checkbox"><input type="checkbox" data-bind="checked: settings.auto_connect"> Connect printer when the plug turns on</label>
+            <div class="input-append">
+                <input type="number" min="0" step="1" class="input-mini" data-bind="value: settings.auto_connect_delay, enable: settings.auto_connect">
+                <span class="add-on">s wait for printer to boot</span>
+            </div>
+            <span class="help-block">Uses the port/baudrate from Settings &gt; Serial Connection. Also works when switched on from the Tapo app (noticed within 15 s).
+                Turning the plug off disconnects the printer first.</span>
+        </div>
+    </div>
     <p class="muted">Enable <b>Third-Party Compatibility</b> in the Tapo app (Me &gt; Third-Party Services).
         The plug icon in the top bar toggles power (green = on, red = off, grey = error).</p>
 </form>

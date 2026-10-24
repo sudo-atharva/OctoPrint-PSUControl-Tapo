@@ -5,6 +5,8 @@ import threading
 
 import flask
 import octoprint.plugin
+import octoprint.settings
+from octoprint.util import RepeatedTimer
 from kasa import AuthenticationError, Credentials, Device, DeviceConfig, Discover
 from kasa import DeviceConnectionParameters, DeviceEncryptionType, DeviceFamily
 
@@ -61,9 +63,41 @@ class TapoPlugin(octoprint.plugin.StartupPlugin,
         threading.Thread(target=self._loop.run_forever, daemon=True).start()
         self._dev = None
         self._off_timer = None
+        self._last_on = None
 
     def get_settings_defaults(self):
-        return dict(host="", username="", password="", auto_off=False, auto_off_delay=2)
+        return dict(host="", username="", password="", auto_off=False, auto_off_delay=2,
+                    auto_connect=True, auto_connect_delay=15)
+
+    # ---- auto-connect when the plug turns on (from OctoPrint, the Tapo app or the button) ----
+
+    def on_after_startup(self):
+        # ponytail: 15 s poll, so switching on from the Tapo app is noticed within ~15 s
+        RepeatedTimer(15, self._poll, daemon=True).start()
+
+    def _poll(self):
+        if self._settings.get(["host"]) and self._settings.get_boolean(["auto_connect"]):
+            try:
+                self._run(self._control("status"))
+            except Exception as e:
+                self._logger.debug("Poll failed: %s", e)
+
+    def _on_state(self, is_on):
+        was, self._last_on = self._last_on, is_on
+        if was is False and is_on and self._settings.get_boolean(["auto_connect"]):
+            delay = max(0.0, float(self._settings.get(["auto_connect_delay"]) or 0))
+            self._logger.info("Plug turned on, connecting printer in %s s", delay)
+            t = threading.Timer(delay, self._auto_connect)
+            t.daemon = True
+            t.start()
+
+    def _auto_connect(self):
+        if not self._printer.is_closed_or_error():
+            return
+        s = octoprint.settings.settings()
+        port, baud = s.get(["serial", "port"]), s.getInt(["serial", "baudrate"])
+        self._logger.info("Auto-connect: port=%s baudrate=%s", port or "AUTO", baud or "AUTO")
+        self._printer.connect(port=port, baudrate=baud)
 
     # ---- optional PSU Control backend: OctoDash, OctoApp etc. switch power through PSU Control ----
 
@@ -168,8 +202,11 @@ class TapoPlugin(octoprint.plugin.StartupPlugin,
                 self._dev = await connect(self._settings.get(["host"]), self._credentials())
             await self._dev.update()
             if action != "status":
+                if action == "off" and self._printer.is_operational() and not self._printer.is_printing():
+                    self._printer.disconnect()  # clean disconnect instead of a serial error
                 await (self._dev.turn_on() if action == "on" else self._dev.turn_off())
                 await self._dev.update()
+            self._on_state(self._dev.is_on)
             return self._dev.is_on
         except Exception:
             await self._drop_device()

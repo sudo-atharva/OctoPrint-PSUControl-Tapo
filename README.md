@@ -18,6 +18,8 @@ Restart OctoPrint.
 Settings > **Tapo Plug**: enter Tapo email + password, click **Auto-detect**, pick your plug, Save. Use the On/Off buttons there to test; errors are shown next to them.
 
 **Auto-off** (`auto-off` branch, testing): tick "Turn plug off after a print finishes" and set the delay in minutes. Starting a new print cancels a pending auto-off; cancelled/failed prints don't trigger it.
+**Auto-connect** (`auto-off` branch, on by default): when the plug turns on (from OctoPrint, the Tapo app or the plug button), waits N seconds for the printer to boot, then connects using Settings > Serial Connection port/baudrate. Turning the plug off disconnects the printer first.
+
 **OctoDash / OctoApp**: these apps control power through [PSU Control](https://github.com/kantlivelong/OctoPrint-PSUControl). Install PSU Control, then in its settings set Switching and Sensing to `psucontrol_tapo`; the apps' power buttons then switch the Tapo plug. (`auto-off` branch.)
 
 Test build install URL: `https://github.com/sudo-atharva/OctoPrint-PSUControl-Tapo/archive/refs/heads/auto-off.zip`

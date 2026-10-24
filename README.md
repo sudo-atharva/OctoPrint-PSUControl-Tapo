@@ -80,6 +80,10 @@ Uses [python-kasa](https://github.com/python-kasa/python-kasa). Newer Tapo firmw
 
 `tools/tapo_test.py` is a small command-line tester: `python tools/tapo_test.py <ip> status|on|off` (credentials via `TAPO_USERNAME` / `TAPO_PASSWORD` env vars).
 
+## Author
+
+Made by [sudo-atharva](https://github.com/sudo-atharva).
+
 ## License
 
-[AGPLv3](LICENSE)
+Copyright (C) 2026 sudo-atharva. Released under [AGPLv3](LICENSE).

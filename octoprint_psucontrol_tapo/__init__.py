@@ -1,4 +1,5 @@
 # coding=utf-8
+# OctoPrint Tapo Plug - Copyright (C) 2026 sudo-atharva - AGPLv3
 import asyncio
 import socket
 import threading
